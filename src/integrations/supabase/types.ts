@@ -14,7 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      lottery_draws: {
+        Row: {
+          created_at: string
+          draw_date: string
+          id: string
+          numbers: number[]
+        }
+        Insert: {
+          created_at?: string
+          draw_date: string
+          id?: string
+          numbers: number[]
+        }
+        Update: {
+          created_at?: string
+          draw_date?: string
+          id?: string
+          numbers?: number[]
+        }
+        Relationships: []
+      }
+      lottery_predictions: {
+        Row: {
+          actual_numbers: number[] | null
+          confidence: number
+          created_at: string
+          draw_date: string
+          id: string
+          matches: number | null
+          predicted_numbers: number[]
+          reasoning: string | null
+        }
+        Insert: {
+          actual_numbers?: number[] | null
+          confidence?: number
+          created_at?: string
+          draw_date: string
+          id?: string
+          matches?: number | null
+          predicted_numbers: number[]
+          reasoning?: string | null
+        }
+        Update: {
+          actual_numbers?: number[] | null
+          confidence?: number
+          created_at?: string
+          draw_date?: string
+          id?: string
+          matches?: number | null
+          predicted_numbers?: number[]
+          reasoning?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
