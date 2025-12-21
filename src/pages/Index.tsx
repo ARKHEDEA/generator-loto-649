@@ -103,12 +103,8 @@ const Index = () => {
     }, 2000);
   };
 
-  // Generate initial predictions when data loads
-  useEffect(() => {
-    if (allDraws && allDraws.length > 0 && predictions.length === 0) {
-      generateAIPredictions();
-    }
-  }, [allDraws]);
+  // Removed auto-generation to prevent slow loading
+  // User can click "Analiză Nouă" button when they want predictions
 
   const handleSync = () => {
     syncMutation.mutate();
