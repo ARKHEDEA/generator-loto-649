@@ -321,15 +321,29 @@ const Index = () => {
           <HistoryTable history={predictionHistory} />
         </section>
 
-        {/* Footer Note */}
-        <footer className="mt-12 text-center text-sm text-muted-foreground">
-          <p className="flex items-center justify-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary" />
-            Predicțiile sunt generate automat în fiecare Joi și Duminică
-          </p>
-          <p className="mt-2 text-xs">
-            Acest sistem este doar pentru divertisment. Jocurile de noroc implică riscuri.
-          </p>
+        {/* Footer */}
+        <footer className="mt-12 border-t border-border/50 pt-8 pb-6 text-center text-sm text-muted-foreground">
+          <div className="max-w-2xl mx-auto space-y-4">
+            <p className="text-xs leading-relaxed px-4">
+              <strong className="text-foreground">Disclaimer:</strong> Această aplicație este oferită exclusiv în scop informativ și de divertisment. 
+              Nu garantează și nu pretinde că generează predicții câștigătoare. Rezultatele afișate sunt bazate pe analize statistice ale datelor istorice 
+              și nu constituie sfaturi de joc. Utilizarea se face pe propria răspundere. Autorul nu își asumă nicio responsabilitate pentru eventuale 
+              pierderi financiare și, totodată, nu formulează nicio pretenție financiară în cazul unor câștiguri obținute. 
+              Jocurile de noroc implică riscuri — jucați responsabil.
+            </p>
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              <span>Predicțiile sunt generate automat în fiecare Joi și Duminică</span>
+            </div>
+            <div className="pt-2 border-t border-border/30 text-xs space-y-1">
+              <p className="text-foreground font-medium">© {new Date().getFullYear()} Adrian Constantin</p>
+              <p>
+                <a href="mailto:adi@adrianconstantin.ro" className="text-primary hover:underline">adi@adrianconstantin.ro</a>
+                {' · '}
+                <a href="https://www.adrianconstantin.ro" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">www.adrianconstantin.ro</a>
+              </p>
+            </div>
+          </div>
         </footer>
       </main>
     </div>
