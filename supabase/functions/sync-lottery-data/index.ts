@@ -238,45 +238,63 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Fetch historical data
-    const draws = await fetchLotteryData();
-    console.log(`Fetched ${draws.length} draws`);
+    // Check how many draws we already have
+    const { count, error: countError } = await supabase
+      .from('lottery_draws')
+      .select('*', { count: 'exact', head: true });
+
+    if (countError) throw countError;
+
+    // Get the latest draw date in DB
+    const { data: latestDraw } = await supabase
+      .from('lottery_draws')
+      .select('draw_date')
+      .order('draw_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    const allSourceDraws = await fetchLotteryData();
     
-    // Insert into database (upsert to avoid duplicates)
-    let inserted = 0;
-    let updated = 0;
-    
-    for (const draw of draws) {
-      const { data, error } = await supabase
-        .from('lottery_draws')
-        .upsert({
-          draw_date: draw.date,
-          numbers: draw.numbers,
-        }, {
-          onConflict: 'draw_date',
-          ignoreDuplicates: false,
-        })
-        .select();
-      
-      if (error) {
-        console.error(`Error inserting draw ${draw.date}:`, error);
-      } else if (data && data.length > 0) {
-        inserted++;
-      }
+    // Filter only draws newer than what we have
+    let drawsToInsert = allSourceDraws;
+    if (latestDraw) {
+      drawsToInsert = allSourceDraws.filter(d => d.date > latestDraw.draw_date);
+    }
+
+    if (drawsToInsert.length === 0 && (count || 0) > 0) {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          skipped: true,
+          message: `Datele sunt deja la zi (${count} extrageri în bază).`,
+          total: count 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
     }
     
-    console.log(`Sync complete. Processed ${inserted} draws.`);
+    // Insert only new draws
+    let inserted = 0;
+    for (const draw of drawsToInsert) {
+      const { error } = await supabase
+        .from('lottery_draws')
+        .upsert({ draw_date: draw.date, numbers: draw.numbers }, {
+          onConflict: 'draw_date',
+          ignoreDuplicates: true,
+        });
+      
+      if (!error) inserted++;
+    }
+    
+    console.log(`Sync complete. Inserted ${inserted} new draws.`);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `Synced ${inserted} lottery draws`,
-        total: draws.length 
+        message: `${inserted} extrageri noi adăugate (total: ${(count || 0) + inserted})`,
+        total: (count || 0) + inserted 
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
     
   } catch (error) {
@@ -284,10 +302,7 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
