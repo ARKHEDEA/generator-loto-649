@@ -6,13 +6,14 @@ import { HistoryTable } from "@/components/HistoryTable";
 import { 
   useLotteryDraws,
   useAllLotteryDraws,
+  useLotteryPredictions,
   useSyncLotteryData,
+  useSaveSuggestions,
   calculateFrequenciesFromDraws,
   getDrawStats,
 } from "@/hooks/useLotteryData";
 import { getNextDrawDates } from "@/lib/lotteryData";
 import { 
-  Brain, 
   Target, 
   TrendingUp, 
   Calendar,
@@ -20,7 +21,8 @@ import {
   BarChart3,
   RefreshCw,
   Download,
-  Database
+  Database,
+  Brain
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -28,95 +30,99 @@ import { toast } from "sonner";
 const Index = () => {
   const { data: recentDraws, isLoading: isLoadingRecent } = useLotteryDraws(50);
   const { data: allDraws, isLoading: isLoadingAll } = useAllLotteryDraws();
+  const { data: savedSuggestions } = useLotteryPredictions();
   const syncMutation = useSyncLotteryData();
+  const saveSuggestionsMutation = useSaveSuggestions();
   
-  const [predictions, setPredictions] = useState<Array<{
+  const [suggestions, setSuggestions] = useState<Array<{
     date: string;
     dayName: string;
     numbers: number[];
     confidence: number;
     reasoning: string;
   }>>([]);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [hasSynced, setHasSynced] = useState(false);
+
+  // Auto-sync on first load if DB is empty
+  useEffect(() => {
+    if (!hasSynced && allDraws && allDraws.length === 0 && !syncMutation.isPending) {
+      setHasSynced(true);
+      syncMutation.mutate();
+    } else if (allDraws && allDraws.length > 0) {
+      setHasSynced(true);
+    }
+  }, [allDraws, hasSynced]);
 
   // Calculate frequencies from real data
   const frequencies = allDraws ? calculateFrequenciesFromDraws(allDraws).slice(0, 10) : [];
   const stats = allDraws ? getDrawStats(allDraws) : null;
 
-  // Generate predictions based on real data analysis
-  const generateAIPredictions = () => {
+  // Generate suggestions based on real data analysis
+  const generateSuggestions = () => {
     if (!allDraws || allDraws.length === 0) return;
 
-    setIsAnalyzing(true);
-    toast.info("Analizăm pattern-urile din datele istorice...", { duration: 2000 });
+    setIsGenerating(true);
 
-    setTimeout(() => {
-      const nextDates = getNextDrawDates();
-      const topFrequencies = calculateFrequenciesFromDraws(allDraws);
-      
-      // Analyze patterns
-      const hotNumbers = topFrequencies.filter(f => f.isHot).map(f => f.number);
-      const coldNumbers = Array.from({ length: 49 }, (_, i) => i + 1)
-        .filter(n => !topFrequencies.find(f => f.number === n) || 
-          topFrequencies.find(f => f.number === n)!.frequency < topFrequencies[topFrequencies.length - 1]?.frequency);
+    const nextDates = getNextDrawDates();
+    const topFrequencies = calculateFrequenciesFromDraws(allDraws);
+    
+    const hotNumbers = topFrequencies.filter(f => f.isHot).map(f => f.number);
 
-      const newPredictions = nextDates.flatMap((dateInfo, idx) => {
-        const predCount = idx === 0 ? 3 : 2;
-        return Array.from({ length: predCount }, (_, i) => {
-          // Mix hot and cold numbers with some randomness
-          const numbers: number[] = [];
-          
-          // Add 3-4 hot numbers
-          const hotCount = 3 + Math.floor(Math.random() * 2);
-          while (numbers.length < hotCount && hotNumbers.length > 0) {
-            const num = hotNumbers[Math.floor(Math.random() * Math.min(hotNumbers.length, 15))];
-            if (!numbers.includes(num)) numbers.push(num);
-          }
-          
-          // Fill rest with balanced selection
-          while (numbers.length < 6) {
-            const num = Math.floor(Math.random() * 49) + 1;
-            if (!numbers.includes(num)) numbers.push(num);
-          }
-          
-          numbers.sort((a, b) => a - b);
+    const newSuggestions = nextDates.flatMap((dateInfo, idx) => {
+      const count = idx === 0 ? 3 : 2;
+      return Array.from({ length: count }, (_, i) => {
+        const numbers: number[] = [];
+        
+        // Add 3-4 hot numbers
+        const hotCount = 3 + Math.floor(Math.random() * 2);
+        while (numbers.length < hotCount && hotNumbers.length > 0) {
+          const num = hotNumbers[Math.floor(Math.random() * Math.min(hotNumbers.length, 15))];
+          if (!numbers.includes(num)) numbers.push(num);
+        }
+        
+        // Fill rest with balanced selection
+        while (numbers.length < 6) {
+          const num = Math.floor(Math.random() * 49) + 1;
+          if (!numbers.includes(num)) numbers.push(num);
+        }
+        
+        numbers.sort((a, b) => a - b);
 
-          const reasonings = [
-            `Bazat pe analiza ${allDraws.length} extrageri istorice. Combinație optimizată cu ${hotCount} numere frecvente.`,
-            `Pattern detectat din ultimele 100 extrageri. Echilibru par-impar: ${stats?.evenOddRatio}.`,
-            `Predicție AI bazată pe tendințe recente și suma medie: ${stats?.avgSum}.`,
-          ];
+        const reasonings = [
+          `Bazat pe analiza ${allDraws.length} extrageri istorice. Combinație cu ${hotCount} numere frecvente.`,
+          `Pattern detectat din ultimele 100 extrageri. Echilibru par-impar: ${stats?.evenOddRatio}.`,
+          `Analiză statistică bazată pe tendințe recente și suma medie: ${stats?.avgSum}.`,
+        ];
 
-          return {
-            date: dateInfo.date,
-            dayName: dateInfo.dayName,
-            numbers,
-            confidence: Math.floor(Math.random() * 20) + 65,
-            reasoning: reasonings[i % reasonings.length],
-          };
-        });
+        return {
+          date: dateInfo.date,
+          dayName: dateInfo.dayName,
+          numbers,
+          confidence: Math.floor(Math.random() * 20) + 65,
+          reasoning: reasonings[i % reasonings.length],
+        };
       });
+    });
 
-      setPredictions(newPredictions);
-      setIsAnalyzing(false);
-      toast.success("Predicții noi generate pe baza datelor reale!");
-    }, 2000);
+    setSuggestions(newSuggestions);
+
+    // Save to database
+    const toSave = newSuggestions.map(s => ({
+      draw_date: nextDates.find(d => d.date === s.date)?.dateObj.toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+      predicted_numbers: s.numbers,
+      confidence: s.confidence,
+      reasoning: s.reasoning,
+    }));
+    saveSuggestionsMutation.mutate(toSave);
+
+    setIsGenerating(false);
+    toast.success("Sugestii noi generate și salvate!");
   };
-
-  // Removed auto-generation to prevent slow loading
-  // User can click "Analiză Nouă" button when they want predictions
 
   const handleSync = () => {
     syncMutation.mutate();
   };
-
-  // Create history from predictions (simulated matches)
-  const predictionHistory = predictions.slice(0, 4).map((pred, idx) => ({
-    date: pred.date,
-    predicted: pred.numbers,
-    actual: recentDraws?.[idx]?.numbers || pred.numbers,
-    matches: Math.floor(Math.random() * 3) + 1,
-  }));
 
   const isLoading = isLoadingRecent || isLoadingAll;
 
@@ -140,8 +146,8 @@ const Index = () => {
                 </h1>
               </div>
               <p className="text-muted-foreground max-w-lg">
-                Sistem inteligent de analiză și predicție bazat pe pattern-uri istorice 
-                pentru Loteria Română 6 din 49.
+                Sistem inteligent de analiză statistică pentru Loteria Română 6 din 49.
+                Generează combinații sugerate pe baza datelor istorice.
               </p>
             </div>
             <div className="flex gap-3">
@@ -155,12 +161,12 @@ const Index = () => {
                 {syncMutation.isPending ? 'Sincronizare...' : 'Sincronizează Date'}
               </Button>
               <Button 
-                onClick={generateAIPredictions}
-                disabled={isAnalyzing || !allDraws}
+                onClick={generateSuggestions}
+                disabled={isGenerating || !allDraws || allDraws.length === 0}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 glow-gold"
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isAnalyzing ? 'animate-spin' : ''}`} />
-                {isAnalyzing ? 'Analizăm...' : 'Analiză Nouă'}
+                <RefreshCw className={`w-4 h-4 mr-2 ${isGenerating ? 'animate-spin' : ''}`} />
+                {isGenerating ? 'Generăm...' : 'Generează Sugestii'}
               </Button>
             </div>
           </div>
@@ -209,35 +215,35 @@ const Index = () => {
             delay={200}
           />
           <StatsCard 
-            title="Predicții Active"
-            value={predictions.length.toString()}
-            subtitle="Pentru următoarele extrageri"
+            title="Sugestii Salvate"
+            value={savedSuggestions?.length.toString() || "0"}
+            subtitle="Total sugestii generate"
             icon={TrendingUp}
             delay={300}
           />
         </div>
 
-        {/* Predictions Section */}
+        {/* Suggestions Section */}
         <section className="mb-10">
           <div className="flex items-center gap-3 mb-6">
             <Calendar className="w-6 h-6 text-primary" />
-            <h2 className="text-2xl font-bold text-foreground">Predicții Următoare</h2>
+            <h2 className="text-2xl font-bold text-foreground">Sugestii Următoare</h2>
           </div>
-          {predictions.length === 0 && !isAnalyzing ? (
+          {suggestions.length === 0 && !isGenerating ? (
             <div className="text-center py-12 text-muted-foreground">
-              <Brain className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Sincronizează datele pentru a genera predicții bazate pe analiza AI</p>
+              <img src="/favicon.png" alt="" className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>Apasă „Generează Sugestii" pentru combinații bazate pe analiza statistică</p>
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {predictions.map((pred, idx) => (
+              {suggestions.map((s, idx) => (
                 <PredictionCard 
                   key={idx}
-                  date={pred.date}
-                  dayName={pred.dayName}
-                  numbers={pred.numbers}
-                  confidence={pred.confidence}
-                  reasoning={pred.reasoning}
+                  date={s.date}
+                  dayName={s.dayName}
+                  numbers={s.numbers}
+                  confidence={s.confidence}
+                  reasoning={s.reasoning}
                   index={idx}
                 />
               ))}
@@ -247,13 +253,11 @@ const Index = () => {
 
         {/* Analysis Grid */}
         <div className="grid lg:grid-cols-2 gap-6 mb-10">
-          {/* Frequency Chart */}
           <FrequencyChart 
             data={frequencies}
             title="Top 10 Numere Frecvente"
           />
 
-          {/* Pattern Analysis */}
           <div className="card-gradient border border-border/50 rounded-xl p-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center gap-3 mb-4">
               <Brain className="w-5 h-5 text-primary" />
@@ -318,7 +322,7 @@ const Index = () => {
 
         {/* History Section */}
         <section>
-          <HistoryTable history={predictionHistory} />
+          <HistoryTable suggestions={savedSuggestions || []} />
         </section>
 
         {/* Footer */}
@@ -333,7 +337,7 @@ const Index = () => {
             </p>
             <div className="flex items-center justify-center gap-2 text-xs">
               <Sparkles className="w-3.5 h-3.5 text-primary" />
-              <span>Predicțiile sunt generate automat în fiecare Joi și Duminică</span>
+              <span>Sugestiile sunt generate pe baza analizei statistice a extragerilor istorice</span>
             </div>
             <div className="pt-2 border-t border-border/30 text-xs space-y-1">
               <p className="text-foreground font-medium">© {new Date().getFullYear()} Adrian Constantin</p>

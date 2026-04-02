@@ -58,10 +58,32 @@ export const useLotteryPredictions = () => {
       const { data, error } = await supabase
         .from('lottery_predictions')
         .select('*')
-        .order('draw_date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as LotteryPrediction[];
+    },
+  });
+};
+
+export const useSaveSuggestions = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (suggestions: { draw_date: string; predicted_numbers: number[]; confidence: number; reasoning: string }[]) => {
+      const { data, error } = await supabase
+        .from('lottery_predictions')
+        .insert(suggestions)
+        .select();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lottery-predictions'] });
+    },
+    onError: (error) => {
+      console.error('Error saving suggestions:', error);
     },
   });
 };
@@ -77,7 +99,11 @@ export const useSyncLotteryData = () => {
       return data;
     },
     onSuccess: (data) => {
-      toast.success(`Date sincronizate: ${data.message}`);
+      if (data.skipped) {
+        toast.info(data.message);
+      } else {
+        toast.success(`Date sincronizate: ${data.message}`);
+      }
       queryClient.invalidateQueries({ queryKey: ['lottery-draws'] });
       queryClient.invalidateQueries({ queryKey: ['all-lottery-draws'] });
     },
@@ -100,7 +126,7 @@ export const calculateFrequenciesFromDraws = (draws: LotteryDraw[]) => {
     .map(([num, freq]) => ({
       number: parseInt(num),
       frequency: freq,
-      isHot: freq >= Math.ceil(draws.length * 0.15), // Top 15% frequency
+      isHot: freq >= Math.ceil(draws.length * 0.15),
     }))
     .sort((a, b) => b.frequency - a.frequency);
 };
