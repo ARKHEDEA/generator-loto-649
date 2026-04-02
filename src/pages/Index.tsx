@@ -133,7 +133,7 @@ const Index = () => {
             <div>
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2.5 rounded-xl bg-primary/10 glow-gold animate-pulse-gold">
-                  <Brain className="w-8 h-8 text-primary" />
+                  <img src="/favicon.png" alt="Trifoi norocos" className="w-8 h-8" />
                 </div>
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground">
                   Loto <span className="gradient-text">6/49</span> AI
